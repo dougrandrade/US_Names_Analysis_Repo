@@ -3,53 +3,22 @@ library(ggplot2)
 library(tidyr)
 library(dplyr)
 library(scales)  # For pretty_breaks()
+library(babynames)
 
 
 # Define the URL and the destination file path
-url <- 'https://www.ssa.gov/oact/babynames/names.zip'
-########
-# Function to read data directly from the URL and add the year column
-read_and_add_year <- function(url) {
-  # Create a temporary file
-  temp <- tempfile()
-  
-  tryCatch({
-    # Download the ZIP file to the temporary file
-    download.file(url, temp)
-    
-    # Extract the files from the ZIP into a temporary directory
-    temp_dir <- tempdir()
-    unzip(temp, exdir = temp_dir)
-    
-    # Read all the data files in the extracted directory
-    files <- list.files(temp_dir, pattern = '*.txt', full.names = TRUE)
-    
-    # Process each file and add the year column
-    data_list <- lapply(files, function(file) {
-      year <- as.numeric(sub('yob(\\d{4}).txt', '\\1', basename(file)))
-      data <- read.csv(file, header = FALSE, stringsAsFactors = FALSE)
-      data$Year <- year
-      colnames(data) <- c('Name', 'Gender', 'Records', 'Year')
-      return(data)
-    })
-    # Combine the data from all years into a single data frame
-    combined_data <- do.call(rbind, data_list)
-    
-    # Return the combined data
-    return(combined_data)
-  }, error = function(e) {
-    showNotification("Failed to load data: Check URL or your connection.", type = "error")
-    return(NULL)
-  })
-}
-all_data <- read_and_add_year(url)
+# Define the URL and the destination file path
+all_data <- babynames %>%
+  select(year, sex, name, n) %>%
+  rename(Year = year, Gender = sex, Name = name, Records = n) %>%
+  mutate(Gender = ifelse(Gender == "F", "Female", "Male"))
 
 
 # Get user input
 #YourName <- readline(prompt = 'Enter the first name you are interested in: ')
 YourName <- 'Douglas'
 #YourGender <- readline(prompt = 'Enter if male or female (M or F): ')
-YourGender <- 'M'
+YourGender <- 'Male'
 
 # Filter the data based on the user input
 filtered_data <- all_data %>%
@@ -65,7 +34,7 @@ last_rec <- filtered_data$Records[which.max(filtered_data$Year)]
 
 # Plot the data
 ggplot(filtered_data, aes(x = Year, y = Records)) +
-  geom_line(color = 'darkgreen', size = 1) +
+  geom_line(color = 'darkgreen', linewidth = 1) +
   
   geom_vline(xintercept = year_max, linetype = 'dashed', color = 'white', size = .4) +
   annotate('text', x = year_max, y = MaxRec, 
@@ -97,7 +66,7 @@ ggplot(filtered_data, aes(x = Year, y = Records)) +
   
 
 library(forecast)
-records <- ts(filtered_data[3], start = 1880, frequency = 1)
+records <- ts(filtered_data$Records, start = 1880, frequency = 1)
 head(records)
 
 #library(urca)
@@ -111,7 +80,7 @@ checkresiduals(records_arima)
 
 ############################################
 # Ensure the filtered_data contains records over time
-filtered_data <- filtered_data()
+filtered_data <- filtered_data
 
 if (nrow(filtered_data) > 0) {
   # Step 1: Convert data to a time series object
@@ -196,7 +165,7 @@ ggplot(unique_names, aes(x = Year, y = unique_records)) +
        y = "Number of Unique Records") +
  
   geom_point(data = unique_names[unique_names$Year == year_input, ], 
-             aes(x = Year, y = Unique_Names), 
+             aes(x = Year, y = unique_records), 
              color = 'white', size = 3)  +
   annotate('text', x = year_input, y = unique_names[unique_names$Year == year_input, ]$unique_records, 
            label = paste(year_input, ':\n', 
