@@ -6,42 +6,16 @@ library(dplyr)
 library(scales)
 library(forecast)
 library(rsconnect)
+library(babynames)
 ################################################################################
 #### Retrieve the Social Security Administration Names Database
 ################################################################################
 # Define the URL and the destination file path
-url <- 'https://www.ssa.gov/oact/babynames/names.zip'
-# Function to read data directly from the URL and add the year column
-read_and_add_year <- function(url) {
-  temp <- tempfile()
-  tryCatch({
-    # Download the ZIP file to the temporary file
-    download.file(url, temp)
-    # Extract the files from the ZIP into a temporary directory
-    temp_dir <- tempdir()
-    unzip(temp, exdir = temp_dir)
-    # Read all the data files in the extracted directory
-    files <- list.files(temp_dir, 
-                        pattern = '*.txt', 
-                        full.names = TRUE)
-    # Process each file and add the year column
-    data_list <- lapply(files, function(file) {
-      year <- as.numeric(sub('yob(\\d{4}).txt', '\\1', basename(file)))
-      data <- read.csv(file, 
-                       header = FALSE, 
-                       stringsAsFactors = FALSE)
-      data$Year <- year
-      colnames(data) <- c('Name', 'Gender', 'Records', 'Year')
-      return(data)})
-    # Combine the data from all years into a single data frame
-    combined_data <- do.call(rbind, data_list)
-    # Return the combined data
-    return(combined_data)
-  }, error = function(e) {
-    showNotification('Failed to load data: Check URL or your connection.', type = 'error')
-    return(NULL)}
-  )}
-all_data <- read_and_add_year(url)
+all_data <- babynames %>%
+  select(year, sex, name, n) %>%
+  rename(Year = year, Gender = sex, Name = name, Records = n) %>%
+  mutate(Gender = ifelse(Gender == "F", "Female", "Male"))
+
 # Helper function to calculate rank for a given name, gender, and year
 calculate_rank <- function(data, year, name, gender) {
   year_data <- data %>%
@@ -195,7 +169,7 @@ server <- function(input, output, session) {
         # Set the plot theme
         theme_dark() +
         # Historical data line plot
-        geom_line(color = 'darkgreen', size = 1) +
+        geom_line(color = 'darkgreen', linewidth = 1) +
         # Vertical dashed line to mark the year with the highest number of records
         geom_vline(xintercept = year_max, linetype = 'dashed', color = 'darkgray', size = 0.4) +
         annotate('text', x = year_max, y = MaxRec, 
@@ -247,7 +221,7 @@ server <- function(input, output, session) {
       # Set the plot theme
       theme_dark() +
       # Unique names line plot
-      geom_line(color = 'darkblue', size = 1) +
+      geom_line(color = 'darkblue', linewidth = 1) +
       # Append a white dot marker to highlight the number of unique names records for the year of interest
       geom_point(data = unique_names_data[unique_names_data$Year == input$year, ], 
                  aes(x = Year, y = unique_records), 
